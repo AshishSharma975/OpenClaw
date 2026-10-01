@@ -1,13 +1,32 @@
 wht we can use in this project
 
+
+chapter 1 
+
 1st - install bun similar as nodejs but very fast
 2nd - install commander.js
 3rd - clack for user interaction and visul
 4th - figlet.js is a programme for making large letter out of ordinary text.
+
+chapter 2 
+
 5th - #!/usr/bin/env bun - shebang to run the code directly.
 6th - add package.json ino this -  "bin": {
     "ashcodeclaw-build": "./index.ts"
   },
 7th -in terminal run-> bun link -> make it executable globally.
-8th - then we can run the code as -  ashcodeclaw-build wakeup
-9th - 
+8th - then we can run the code as -  ashcodeclaw-build wakeup..
+
+
+chapter 3 
+
+add exit mode 
+add runcliMode() - 1 agent
+                   2 plan
+                   3 ask
+                   4 back
+
+chapter 4 
+                  
+
+

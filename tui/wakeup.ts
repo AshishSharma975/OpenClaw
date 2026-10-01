@@ -2,7 +2,7 @@ import { select, isCancel } from "@clack/prompts";
 import chalk from "chalk"; // for add coloring in terminal.
 import figlet from "figlet"; // for add big letters.
 
-
+import { runCliMode } from "../modes/cli";
 
 const BANNER_FONT='ANSI SHADOW';
 const SHADOW = chalk.hex('#5b4d9e');
@@ -11,20 +11,19 @@ const FACE = chalk.hex('#e8dcf8').bold;
 
 
 // banner of your ashcodeclaw
-function printBannerWithShadow(ascii:string){
+function printBanner(ascii: string) {
     const bannerlines = ascii.replace(/\s+$/, '').split('\n');
-    const maxLength=bannerlines.reduce((max,line) => Math.max(max,line.length),0);
-    const rowWidths = maxLength + 2;
- 
+
+    // Shadow layer — offset by 2 spaces to the right
     for (const line of bannerlines) {
-        console.log(SHADOW(' ' + line).padEnd(rowWidths));
+        console.log(SHADOW('  ' + line));
     }
 
-    process.stdout.write(`\x1b[${bannerlines.length + 2}A`);
-
-    for (const line of bannerlines){
-       console.log(FACE(line.padEnd(rowWidths)))
+    // Face layer — printed directly below
+    for (const line of bannerlines) {
+        console.log(FACE(line));
     }
+
     console.log();
 }
 
@@ -42,7 +41,7 @@ ascii=figlet.textSync('ashcodeclaw' ,{
     })
 }
 
-printBannerWithShadow(ascii)
+printBanner(ascii)
 
 
 const mode = await select({
@@ -50,6 +49,7 @@ const mode = await select({
     options: [
         {value: "cli", label: "CLI Mode"},
         {value: "telegram", label: "Telegram Bot Mode"},
+        {value:"exit", label:"Exit"}
     ]
 })
 
@@ -60,10 +60,13 @@ if (isCancel(mode)){
 
 if(mode === "cli"){
     console.log(chalk.green("CLI Mode selected"));
-    // await run;
-} else {
+    await runCliMode();
+} else if(mode === "telegram") {
     console.log(chalk.blue("Telegram Bot Mode selected"));
-    // await run;
+    // await runTelegramMode();
+} else {
+    console.log(chalk.red("Exiting..."));
+    process.exit(0);
 }
 
 }
