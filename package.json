@@ -1,0 +1,22 @@
+{
+  "name": "openclaw",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "bin": {
+    "ashcodeclaw-build": "./index.ts"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.4.2"
+  },
+  "peerDependencies": {
+    "typescript": "^7"
+  },
+  "dependencies": {
+    "@clack/core": "^1.5.1",
+    "@clack/prompts": "^1.8.1",
+    "chalk": "^6.0.1",
+    "commander": "^15.0.0",
+    "figlet": "^1.12.0"
+  }
+}
