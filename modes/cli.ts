@@ -1,5 +1,6 @@
 import chalk from "chalk";
 import {select , isCancel} from "@clack/prompts";
+import { runAgentMode } from "./agent/orchestrator";
 
 
 
@@ -25,7 +26,7 @@ while(true){
     }
 
     if (mode === "agent") {
-        console.log(chalk.green("Agent Mode selected"));
+        await runAgentMode();
     } else if (mode === "plan") {
         console.log(chalk.blue("Plan Mode selected"));
     } else if (mode === "ask") {
