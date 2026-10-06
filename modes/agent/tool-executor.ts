@@ -47,6 +47,11 @@ function isProbablyTextFile(filepath:string): boolean{
 
 
 export class ToolExecutor {
+    /** In-memory overlay: buffered file contents not yet written to disk */
+    private overlay = new Map<string, string>();
+    /** Tracks files pending deletion in the current session */
+    private deleted = new Set<string>();
+
     constructor(
         private config: AgentConfig,
         private tracker: ActionTracker,
@@ -56,6 +61,11 @@ export class ToolExecutor {
         if (!this.basePath.startsWith(process.cwd())) {
             this.basePath = path.resolve(process.cwd(), this.basePath)
         }
+    }
+
+    /** Normalize a relative path to a consistent key for overlay/deleted lookups */
+    private norm(rel: string): string {
+        return rel.replace(/\\/g, '/').replace(/^\.?\//, '');
     }
 
     private resolveSafe(rel: string): string {
@@ -84,91 +94,183 @@ export class ToolExecutor {
         return false;
     }
 
-    readFile(relPath: string): string {
-        if (this.isExcluded(relPath)) throw new Error(`File is excluded: ${relPath}`);
-        const abs = this.resolveSafe(relPath);
-        const stat = fs.statSync(abs);
-        if (stat.size > this.config.maxFileSizeToRead)
-            throw new Error(`File too large to read: ${relPath}`);
-        if (!isProbablyTextFile(abs))
-            throw new Error(`File does not appear to be text: ${relPath}`);
-        const content = fs.readFileSync(abs, 'utf-8');
-        this.tracker.log({ type: 'read_file', path: relPath, details: {}, status: 'executed' });
-        return content;
+    
+    private assertNotExcluded(rel:string, op:string):void{
+        if(this.isExcluded(rel)){
+            throw new Error(`${op} path is excluded by policy: ${rel}`);
+        }
+    }
+  
+
+    getEffectiveText(rel:string): string | undefined{
+        const key = this.norm(rel);
+        if(this.deleted.has(key)) return undefined
+        if(this.overlay.has(key)) return this.overlay.get(key)!;
+
+        const absolute = this.resolveSafe(rel);
+        if (!fs.existsSync(absolute) || !fs.statSync(absolute).isFile()){
+            return undefined
+        }
+        if(!isProbablyTextFile(absolute)){
+            return undefined
+        }
+        const size = fs.statSync(absolute).size
+        if (size === 0) return '';
+        return fs.readFileSync(absolute, 'utf-8');
+    }
+    
+
+    readFile(rel:string): string{
+        const absolute = this.resolveSafe(rel)
+        const content = fs.readFileSync(absolute, 'utf-8')
+
+        const key = this.norm(rel);
+        this.overlay.set(key,content);
+
+        return content
+
+        
     }
 
-    readDirectory(relPath: string): string[] {
-        if (this.isExcluded(relPath)) throw new Error(`Directory is excluded: ${relPath}`);
-        const abs = this.resolveSafe(relPath);
-        const entries = fs.readdirSync(abs, { withFileTypes: true });
-        const result = entries
-            .map((e) => (e.isDirectory() ? `${e.name}/` : e.name))
-            .filter((name) => !this.isExcluded(`${relPath}/${name}`));
-        this.tracker.log({ type: 'read_directory', path: relPath, details: {}, status: 'executed' });
-        return result;
-    }
+    writeFile(rel:string, content:string): void {
+        this.assertNotExcluded(rel, "writeFile");
 
-    writeFile(relPath: string, content: string): void {
-        if (!this.config.tools.allowFileModification)
-            throw new Error('File modification is disabled in config.');
-        const abs = this.resolveSafe(relPath);
-        const before = fs.existsSync(abs) ? fs.readFileSync(abs, 'utf-8') : undefined;
-        fs.writeFileSync(abs, content, 'utf-8');
+        const key = this.norm(rel)
+        this.overlay.set(key, content)
+        
         this.tracker.log({
-            type: 'file_modify',
-            path: relPath,
-            details: { before, after: content },
-            status: 'executed',
+            type: "file_modify",
+            path: key,
+            details: { after: `content written to overlay (${content.length} chars)` },
+            status: "pending",
         });
     }
 
-    createFile(relPath: string, content: string): void {
-        if (!this.config.tools.allowFileCreation)
-            throw new Error('File creation is disabled in config.');
-        const abs = this.resolveSafe(relPath);
-        fs.mkdirSync(path.dirname(abs), { recursive: true });
-        fs.writeFileSync(abs, content, 'utf-8');
-        this.tracker.log({
-            type: 'file_create',
-            path: relPath,
-            details: { after: content },
-            status: 'executed',
-        });
-    }
+    deleteFile(rel: string): string {
+        if (!this.config.tools.allowFileModification) {
+            throw new Error('File deletion disabled');
+        }
+        this.assertNotExcluded(rel, 'delete_file');
 
-    deleteFile(relPath: string): void {
-        const abs = this.resolveSafe(relPath);
-        const before = fs.existsSync(abs) ? fs.readFileSync(abs, 'utf-8') : undefined;
-        fs.rmSync(abs, { force: true });
+        const before = this.getEffectiveText(rel);
+        if (before === undefined) {
+            throw new Error(`delete_file: file not found: ${rel}`);
+        }
+
+        const key = this.norm(rel);
+        this.overlay.delete(key);
+        this.deleted.add(key);
+
         this.tracker.log({
             type: 'file_delete',
-            path: relPath,
+            path: key,
             details: { before },
-            status: 'executed',
+            status: 'pending',
         });
+
+        return `Staged delete: ${key}`;
     }
 
-    createFolder(relPath: string): void {
-        if (!this.config.tools.allowFolderCreation)
-            throw new Error('Folder creation is disabled in config.');
-        const abs = this.resolveSafe(relPath);
-        fs.mkdirSync(abs, { recursive: true });
-        this.tracker.log({ type: 'folder_create', path: relPath, details: {}, status: 'executed' });
-    }
+    createFolder(rel: string): string {
+        if (!this.config.tools.allowFolderCreation) {
+            throw new Error('Folder creation disabled');
+        }
+        this.assertNotExcluded(rel, 'create_folder');
 
-    executeShell(command: string): string {
-        if (!this.config.tools.allowShellExecution)
-            throw new Error('Shell execution is disabled in config.');
-        const result = spawnSync(command, { shell: true, cwd: this.basePath, encoding: 'utf-8' });
-        const output = result.stdout ?? '';
-        const errorOutput = result.stderr ?? '';
+        const absolute = this.resolveSafe(rel);
+        if (fs.existsSync(absolute)) {
+            return `Folder already exists: ${rel}`;
+        }
+
+        fs.mkdirSync(absolute, { recursive: true });
+
+        const key = this.norm(rel);
         this.tracker.log({
-            type: 'tool_execute',
-            path: this.basePath,
-            details: { command, toolOutput: output, error: errorOutput || undefined },
+            type: 'folder_create',
+            path: key,
+            details: {},
             status: 'executed',
         });
-        if (result.status !== 0) throw new Error(`Command failed: ${errorOutput}`);
-        return output;
+
+        return `Created folder: ${key}`;
+    }
+
+    listFiles(rel:string): string {
+        this.assertNotExcluded(rel, "listFiles");
+
+        const absolute = this.resolveSafe(rel);
+        if(!fs.existsSync(absolute) || !fs.statSync(absolute).isDirectory()){
+            throw new Error(`listFiles: not a directory: ${rel}`);
+        }
+
+        const entries = fs.readdirSync(absolute, {withFileTypes:true})
+
+        const items = entries
+        .filter((e)=>!this.isExcluded(path.join(rel,e.name)))
+        .map((e)=>`${e.name} (${e.isDirectory() ? 'dir' : 'file' })`)
+
+        this.tracker.log({
+            type: "read_directory",
+            path: rel,
+            details: { toolOutput: items.join('\n') },
+            status: "executed",
+        });
+        return `Directory ${rel} contains:\n${items.join('\n')}`;
+
+
+    }
+
+
+    applyAll(): void {
+        for(const [key, content] of this.overlay.entries()){
+            const absolute = this.resolveSafe(key)
+            const dir = path.dirname(absolute)
+
+            if(!fs.existsSync(dir)){
+                fs.mkdirSync(dir, {recursive:true})
+            }
+
+            fs.writeFileSync(absolute, content, 'utf-8')
+            
+            this.tracker.updateStatus(key, 'executed');
+        }
+    }
+
+    executeShell(cmd:string): {stdout:string;stderr:string}{
+        this.assertNotExcluded(cmd, "executeShell");
+
+        if(!this.config.tools.allowShellExecution){
+            throw new Error('Shell execution not enabled by configuration')
+        }
+
+        const action = this.tracker.log({
+            type:"tool_execute",
+            path: cmd,
+            details: { command: cmd },
+            status: "pending",
+        });
+
+        try {
+            const res = spawnSync(cmd, {
+                cwd: this.config.codebasePath,
+                stdio: 'pipe',
+                shell: true,
+                encoding: 'utf-8',
+            });
+
+            const stdout = (res.stdout as string) ?? '';
+            const stderr = (res.stderr as string) ?? '';
+
+            if (res.status !== 0) {
+                this.tracker.updateStatus(action.id, 'failed');
+                throw new Error(`Shell command failed (exit ${res.status}): ${stderr.trim()}`);
+            }
+
+            this.tracker.updateStatus(action.id, 'executed');
+            return { stdout, stderr };
+        } catch (err) {
+            this.tracker.updateStatus(action.id, 'failed');
+            throw err;
+        }
     }
 }

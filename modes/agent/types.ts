@@ -8,7 +8,7 @@ export type ActionType=
 "read_directory"
 
 
-export type ActionStatus = 'pending' | 'executed' | 'approved' | 'rejected';
+export type ActionStatus = 'pending' | 'executed' | 'approved' | 'rejected' | 'failed';
 
 export interface ActionLog{
     id:string;
