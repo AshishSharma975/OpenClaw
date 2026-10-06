@@ -32,6 +32,7 @@ for the ai part - openrouter/ai and use any model id from open router.
 for ex. -  openai/gpt-oss-20b - this is free and very good for the first attempt.
 - make sure that in every step we store response in a variable and in last we show the response in terminal.
 
+
             
 
             
