@@ -3,6 +3,10 @@ import chalk from "chalk";
 import { defaultAgentConfig } from "./types";
 import { ActionTracker } from "./action.tracker";
 import { ToolExecutor } from "./tool-executor";
+import { createAgentTools } from "./agent-tools";
+import { stepCountIs, ToolLoopAgent } from "ai";
+import { getAgentModel } from "../../ai";
+import { json } from "node:stream/consumers";
 
 export async function runAgentMode(){
     console.log("Agent Mode started");
@@ -21,6 +25,29 @@ export async function runAgentMode(){
     const config = defaultAgentConfig()
     const tracker = new ActionTracker()
     const executor = new ToolExecutor(config, tracker, config.codebasePath)
+    const tools  = createAgentTools(executor);
+    const agent = new ToolLoopAgent({
+        model:  getAgentModel(),
+        stopWhen:stepCountIs(40),
+        instructions:[
+        `workspace root: ${config.codebasePath}`,
+        `All mutation are staged untill approval`
+        ].join("\n"),
+        tools:tools
+        
+    })
 
-
+    const result = await agent.generate({
+        prompt:goal.trim(),
+        onStepFinish:({toolCalls})=>{
+            for(const tc of toolCalls){
+                const preview = JSON.stringify(tc.input).slice(0 , 160)
+                console.log(
+                    chalk.green( ' ✔️'),
+                    chalk.bold(String(tc.toolName)),
+                    chalk.dim(preview + (preview.length >= 160? " ...":""))
+                )
+            }
+        }
+    })
 }

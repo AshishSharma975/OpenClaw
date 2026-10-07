@@ -473,6 +473,10 @@ export class ToolExecutor {
         return text;
     }
 
+    readSkillDocs(skillPath: string): string {
+        return this.readSkill(skillPath);
+    }
+
     applyApprovedFromTracker(): { errors: string[] } {
         const errors: string[] = [];
         const all = [...this.tracker.getActions()];
