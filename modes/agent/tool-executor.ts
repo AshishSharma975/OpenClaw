@@ -51,6 +51,8 @@ export class ToolExecutor {
     private overlay = new Map<string, string>();
     /** Tracks files pending deletion in the current session */
     private deleted = new Set<string>();
+    /** Queue of pending shell tasks awaiting execution/approval */
+    private queue: Array<() => Promise<string>> = [];
 
     constructor(
         private config: AgentConfig,
@@ -273,4 +275,246 @@ export class ToolExecutor {
             throw err;
         }
     }
+
+    searchFiles(
+        rootRel: string,
+        globPattern: string,
+        contentQuery?: string
+    ): string {
+        this.assertNotExcluded(rootRel, "searchFiles");
+        const absolute = this.resolveSafe(rootRel);
+
+        if (!fs.existsSync(absolute) || !fs.statSync(absolute).isDirectory()) {
+            throw new Error(`search_files: not a directory: ${rootRel}`);
+        }
+
+        const results: string[] = [];
+
+        const regexFromGlob = (g: string): RegExp => {
+            const escaped = g
+                .replace(/[.+^${}()|[\]\\]/g, '\\$&')
+                .replace(/\*/g, '.*')
+                .replace(/\*/g, '[^/\\\\]*')
+                .replace(/\$\$/g, '.*')
+                .replace(/\?/g, '.');
+            return new RegExp(`^${escaped}$`, 'i');
+        };
+
+        const nameRe = regexFromGlob(globPattern.replace(/\\\\/g, '/'));
+
+        const walk = (dir: string) => {
+            for (const ent of fs.readdirSync(dir, { withFileTypes: true })) {
+                const full = path.join(dir, ent.name);
+                const relP = path
+                    .relative(this.config.codebasePath, full)
+                    .split(path.sep)
+                    .join('/');
+                if (this.isExcluded(relP)) continue;
+                if (ent.isDirectory()) walk(full);
+                else if (nameRe.test(ent.name) || nameRe.test(relP)) {
+                    if (contentQuery) {
+                        const text = this.getEffectiveText(relP);
+                        if (text !== undefined && text.includes(contentQuery)) {
+                            results.push(relP);
+                        }
+                    } else {
+                        results.push(relP);
+                    }
+                }
+            }
+        };
+
+        walk(absolute);
+
+        this.tracker.log({
+            type: 'read_directory',
+            path: rootRel,
+            details: { toolOutput: results.join('\n') },
+            status: 'executed',
+        });
+
+        return results.length > 0
+            ? `Found ${results.length} file(s):\n${results.join('\n')}`
+            : `No files matched pattern "${globPattern}" in ${rootRel}`;
+    }
+
+    analyzeCodebase(rootRel:string): string{
+        const rootAbs = this.resolveSafe(rootRel)
+        const stats = {
+            files:0,
+            dirs:0,
+            totalLines:0,
+            totalBytes:0,
+            extensions:new Map<string,number>()
+        };
+        const pathExt = (name:string) => name.includes('.') ? name.split('.').pop()!.toLowerCase() : ''
+
+        const walk = (dir:string)=>{
+            for(const ent of fs.readdirSync(dir,{withFileTypes:true})){
+                const full = path.join(dir,ent.name)
+                const relP = path.relative(this.config.codebasePath,full).split(path.sep).join('/')
+                if(this.isExcluded(relP)) continue
+                if(ent.isDirectory()){
+                    stats.dirs++
+                    walk(full)
+                }else{
+                    stats.files++
+                    const ext = pathExt(ent.name)
+                    stats.totalBytes += fs.statSync(full).size
+                    stats.totalLines += this.getEffectiveText(relP)?.split('\n').length ?? 0
+                    if(ext)stats.extensions.set(ext, (stats.extensions.get(ext) || 0) + 1)
+                }
+            }
+        }
+
+        if(!fs.existsSync(rootAbs)|| !fs.statSync(rootAbs).isDirectory()){
+            throw new Error(`analyzeCodebase: not a directory: ${rootRel}`)
+        }
+
+        walk(rootAbs)
+
+        const extList = Array.from(stats.extensions.entries())
+        .sort((a,b)=>b[1]-a[1])
+        .map(([ext,count])=>`${ext}:${count}`)
+        .join(', ')
+
+        const message = `Analysis of ${rootRel}\nFiles: ${stats.files}\nDirectories:${stats.dirs}\nTotal Lines: ${stats.totalLines}\nTotal Bytes: ${stats.totalBytes}\nExtensions: ${extList}`
+        
+        this.tracker.log({
+            type: 'tool_execute',
+            path: rootRel,
+            details: { toolOutput: message },
+            status: 'executed',
+        });
+
+        return message;
+    }
+
+    queueShell(command: string): string {
+        if (!this.config.tools.allowShellExecution) {
+            throw new Error('Shell execution not enabled by configuration');
+        }
+
+        const action = this.tracker.log({
+            type: 'tool_execute',
+            path: command,
+            details: { command },
+            status: 'pending',
+        });
+
+        this.queue.push(async () => {
+            try {
+                const { stdout, stderr } = this.executeShell(command);
+                this.tracker.updateStatus(action.id, 'executed');
+                return stdout || stderr;
+            } catch (error) {
+                this.tracker.updateStatus(action.id, 'failed');
+                return error instanceof Error ? error.message : String(error);
+            }
+        });
+
+        return `Shell command queued: ${command}`;
+    }
+
+    /** Drain and run all queued shell tasks in order */
+    async flushQueue(): Promise<string[]> {
+        const results: string[] = [];
+        while (this.queue.length > 0) {
+            const task = this.queue.shift()!;
+            results.push(await task());
+        }
+        return results;
+    }
+
+    private skillRoots(): string[] {
+        return [
+            path.resolve(this.config.codebasePath, '.agents', 'skills'),
+            path.resolve(this.config.codebasePath, 'skills'),
+        ];
+    }
+
+    listSkills(): string {
+        const roots = this.skillRoots();
+        const found: string[] = [];
+
+        for (const root of roots) {
+            if (!fs.existsSync(root)) continue;
+            for (const ent of fs.readdirSync(root, { withFileTypes: true })) {
+                if (ent.isDirectory()) {
+                    const skillMd = path.join(root, ent.name, 'SKILL.md');
+                    if (fs.existsSync(skillMd)) {
+                        found.push(`${ent.name} (${path.relative(this.config.codebasePath, skillMd)})`);
+                    }
+                }
+            }
+        }
+
+        return found.length > 0
+            ? `Available skills:\n${found.join('\n')}`
+            : 'No skills found.';
+    }
+
+    readSkill(skillPath: string): string {
+        const abs = path.isAbsolute(skillPath)
+            ? path.normalize(skillPath)
+            : path.normalize(path.resolve(this.config.codebasePath, skillPath));
+        const allowed = this.skillRoots().some((root) => {
+            const r = path.resolve(root);
+            return abs === r || abs.startsWith(r + path.sep);
+        });
+        if (!allowed) throw new Error("read_skill: outside skill roots");
+        const text = fs.readFileSync(abs, "utf8");
+        this.tracker.log({
+            type: "code_analysis",
+            path: abs,
+            details: { after: text, toolName: "read_skill" },
+            status: "executed",
+        });
+        return text;
+    }
+
+    applyApprovedFromTracker(): { errors: string[] } {
+        const errors: string[] = [];
+        const all = [...this.tracker.getActions()];
+
+        for (const a of all.filter((x) => x.type === 'folder_create' && x.status === 'approved')) {
+            try {
+                fs.mkdirSync(this.resolveSafe(a.path), { recursive: true });
+            } catch (e) {
+                errors.push(String(e));
+            }
+        }
+
+        const fileOps = all
+            .filter(
+                (a) =>
+                    (a.type === 'file_create' || a.type === 'file_modify' || a.type === 'file_delete') &&
+                    a.status === 'approved',
+            )
+            .sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+
+        for (const a of fileOps) {
+            try {
+                if (a.type === 'file_delete') {
+                    const absPath = this.resolveSafe(a.path);
+                    if (fs.existsSync(absPath)) {
+                        fs.rmSync(absPath, { force: true, recursive: true });
+                    }
+                } else {
+                    const content = a.details.after ?? '';
+                    const absPath = this.resolveSafe(a.path);
+                    const dir = path.dirname(absPath);
+                    if (!fs.existsSync(dir)) {
+                        fs.mkdirSync(dir, { recursive: true });
+                    }
+                    fs.writeFileSync(absPath, content, 'utf-8');
+                }
+            } catch (e) {
+                errors.push(String(e));
+            }
+        }
+
+        return { errors };
+    }
 }
+

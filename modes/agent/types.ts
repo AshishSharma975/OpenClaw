@@ -5,7 +5,8 @@ export type ActionType=
 "folder_create"|
 "tool_execute"|
 "read_file"|
-"read_directory"
+"read_directory"|
+"code_analysis"
 
 
 export type ActionStatus = 'pending' | 'executed' | 'approved' | 'rejected' | 'failed';
