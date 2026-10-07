@@ -63,7 +63,7 @@ export async function runAgentMode(){
     }
 
     const {errors} = await executor.applyApprovedFromTracker();
-    if(errors){
+    if(errors.length > 0){
         console.log(chalk.red(renderTerminalMarkeddown("**Errors occurred during apply**")))
         for(const e of errors){
             console.log(renderTerminalMarkeddown(e));
@@ -73,5 +73,8 @@ export async function runAgentMode(){
         console.log(chalk.green(renderTerminalMarkeddown("**All changes applied successfully**")));
     }
 
+    
     executor.clearStaging();
 }
+
+

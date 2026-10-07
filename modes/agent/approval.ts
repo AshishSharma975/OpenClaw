@@ -95,8 +95,46 @@ export async function runApprovalFlow(tracker: ActionTracker): Promise<boolean> 
   }
 
   if (choice === "select") {
-    return true;
+    const groups = groupPending(pending);
+    for (const g of groups) {
+      while (true) {
+        const opt = await select({
+          message: chalk.bold(g.label),
+          options: [
+            { value: "accept", label: "Accept" },
+            { value: "reject", label: "Reject" },
+            { value: "diff", label: "show diff", hint: g.patch ? String(g.patch) : undefined }
+          ]
+        });
+
+        if (isCancel(opt)) {
+          for (const a of pending) tracker.updateStatus(a.id, "rejected", false);
+          return false;
+        }
+
+        if (opt === "accept") {
+          for (const id of g.actionIds) tracker.updateStatus(id, "approved", false);
+          break;
+        }
+        if (opt === "reject") {
+          for (const id of g.actionIds) tracker.updateStatus(id, "rejected", false);
+          break;
+        }
+        if (opt === "diff") {
+          if (g.patch) {
+            console.log(`\n${g.patch}\n`);
+          } else {
+            console.log(chalk.dim("\nNo diff available.\n"));
+          }
+          continue;
+        }
+      }
+    }
+
+    return tracker.getActions().some((a) => a.status === "approved");
   }
 
   return false;
-}
+
+
+}

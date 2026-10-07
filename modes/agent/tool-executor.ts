@@ -104,46 +104,58 @@ export class ToolExecutor {
     }
   
 
-    getEffectiveText(rel:string): string | undefined{
-        const key = this.norm(rel);
-        if(this.deleted.has(key)) return undefined
-        if(this.overlay.has(key)) return this.overlay.get(key)!;
-
+    getEffectiveText(rel: string): string | undefined {
         const absolute = this.resolveSafe(rel);
-        if (!fs.existsSync(absolute) || !fs.statSync(absolute).isFile()){
-            return undefined
+        const root = path.resolve(this.config.codebasePath);
+        const relPath = path.relative(root, absolute).replace(/\\/g, '/');
+        const key = this.norm(relPath);
+
+        if (this.deleted.has(key)) return undefined;
+        if (this.overlay.has(key)) return this.overlay.get(key)!;
+
+        if (!fs.existsSync(absolute) || !fs.statSync(absolute).isFile()) {
+            return undefined;
         }
-        if(!isProbablyTextFile(absolute)){
-            return undefined
+        if (!isProbablyTextFile(absolute)) {
+            return undefined;
         }
-        const size = fs.statSync(absolute).size
+        const size = fs.statSync(absolute).size;
         if (size === 0) return '';
         return fs.readFileSync(absolute, 'utf-8');
     }
-    
 
-    readFile(rel:string): string{
-        const absolute = this.resolveSafe(rel)
-        const content = fs.readFileSync(absolute, 'utf-8')
+    readFile(rel: string): string {
+        const absolute = this.resolveSafe(rel);
+        const root = path.resolve(this.config.codebasePath);
+        const relPath = path.relative(root, absolute).replace(/\\/g, '/');
+        const key = this.norm(relPath);
 
-        const key = this.norm(rel);
-        this.overlay.set(key,content);
+        if (this.overlay.has(key)) {
+            return this.overlay.get(key)!;
+        }
 
-        return content
-
-        
+        return fs.readFileSync(absolute, 'utf-8');
     }
 
-    writeFile(rel:string, content:string): void {
+    writeFile(rel: string, content: string): void {
         this.assertNotExcluded(rel, "writeFile");
 
-        const key = this.norm(rel)
-        this.overlay.set(key, content)
-        
+        const absolute = this.resolveSafe(rel);
+        const root = path.resolve(this.config.codebasePath);
+        const relPath = path.relative(root, absolute).replace(/\\/g, '/');
+        const key = this.norm(relPath);
+
+        const before = this.getEffectiveText(key);
+
+        this.overlay.set(key, content);
+        this.deleted.delete(key);
+
+        const type = (before === undefined && !fs.existsSync(absolute)) ? "file_create" : "file_modify";
+
         this.tracker.log({
-            type: "file_modify",
+            type,
             path: key,
-            details: { after: `content written to overlay (${content.length} chars)` },
+            details: { before: before ?? undefined, after: content },
             status: "pending",
         });
     }
@@ -154,12 +166,16 @@ export class ToolExecutor {
         }
         this.assertNotExcluded(rel, 'delete_file');
 
-        const before = this.getEffectiveText(rel);
+        const absolute = this.resolveSafe(rel);
+        const root = path.resolve(this.config.codebasePath);
+        const relPath = path.relative(root, absolute).replace(/\\/g, '/');
+        const key = this.norm(relPath);
+
+        const before = this.getEffectiveText(key);
         if (before === undefined) {
             throw new Error(`delete_file: file not found: ${rel}`);
         }
 
-        const key = this.norm(rel);
         this.overlay.delete(key);
         this.deleted.add(key);
 
@@ -180,13 +196,16 @@ export class ToolExecutor {
         this.assertNotExcluded(rel, 'create_folder');
 
         const absolute = this.resolveSafe(rel);
+        const root = path.resolve(this.config.codebasePath);
+        const relPath = path.relative(root, absolute).replace(/\\/g, '/');
+        const key = this.norm(relPath);
+
         if (fs.existsSync(absolute)) {
             return `Folder already exists: ${rel}`;
         }
 
         fs.mkdirSync(absolute, { recursive: true });
 
-        const key = this.norm(rel);
         this.tracker.log({
             type: 'folder_create',
             path: key,
