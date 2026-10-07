@@ -2,7 +2,7 @@ import { select, isCancel } from "@clack/prompts";
 import chalk from "chalk";
 import type { ActionTracker } from "./action.tracker";
 import type { ActionLog } from "./types";
-import { buildEffectiveText, formatPatch } from "./diff-view";
+import { buildEffectiveText, composeBeforeAfter, formatPatch } from "./diff-view";
 
 interface ReviewGroup {
     label: string;
@@ -36,7 +36,7 @@ function groupPending(pending: ActionLog[]): ReviewGroup[] {
             continue;
         }
 
-        const { before, after } = buildEffectiveText(sorted);
+        const { before, after } = composeBeforeAfter(sorted);
         const patch = formatPatch(p, before, after);
         const kinds = [...new Set(sorted.map((x) => x.type))].join(', ');
         groups.push({ label: `${p} (${kinds})`, actionIds: ids, patch });
