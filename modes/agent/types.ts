@@ -41,6 +41,7 @@ export interface AgentConfig{
     }
 }
 
+
 export const defaultAgentConfig = ():AgentConfig => ({
     codebasePath:process.cwd(),
     maxFileSizeToRead:50000,

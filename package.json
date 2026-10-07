@@ -16,10 +16,14 @@
     "@clack/core": "^1.5.1",
     "@clack/prompts": "^1.8.1",
     "@openrouter/ai-sdk-provider": "^3.1.0",
+    "@types/marked-terminal": "^6.1.1",
     "@types/node": "^26.6.3",
     "ai": "^7.0.126",
     "chalk": "^6.0.1",
     "commander": "^15.0.0",
-    "figlet": "^1.12.0"
+    "diff": "^9.0.0",
+    "figlet": "^1.12.0",
+    "marked": "^18.1.0",
+    "marked-terminal": "^7.3.0"
   }
 }
