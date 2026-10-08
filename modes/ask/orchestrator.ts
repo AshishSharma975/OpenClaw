@@ -96,16 +96,30 @@ export async function runAskMode() {
 
     const agent = new ToolLoopAgent({
         model: getAgentModel(),
+        instructions: [
+            `You are an expert AI assistant answering questions about this codebase.`,
+            `Workspace root: ${config.codebasePath}`,
+            `Inspect files and directories using the available tools (read_file, list_files, search_files, analyze_codebase) to understand the codebase.`,
+            `Always produce a thorough, well-formatted Markdown response explaining the concept with code examples when applicable.`
+        ].join("\n"),
         tools,
-        stopWhen:stepCountIs(10),
-
-        
-    })
+        stopWhen: stepCountIs(25),
+    });
 
     const result = await agent.generate({
-        prompt:question.trim()
-    })
-    const asnwer = result.text?.trim() || "(no answer)"
+        prompt: question.trim(),
+        onStepFinish: ({ toolCalls }) => {
+            for (const tc of toolCalls) {
+                const preview = JSON.stringify(tc.input).slice(0, 160);
+                console.log(
+                    chalk.green(' ✔️'),
+                    chalk.bold(String(tc.toolName)),
+                    chalk.dim(preview + (preview.length >= 160 ? " ..." : ""))
+                );
+            }
+        }
+    });
+    const asnwer = result.text?.trim() || "(no answer)";
 
     console.log("\n" + renderTerminalMarkeddown(asnwer) + "\n")
 
