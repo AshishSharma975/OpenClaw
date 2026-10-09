@@ -8,7 +8,8 @@ import { ToolExecutor } from "../agent/tool-executor";
 import { defaultAgentConfig } from "../agent/types";
 import { renderTerminalMarkeddown } from "../../tui/terminal-md";
 import { runApprovalFlow } from "../agent/approval";
-
+import { generatePlan } from "./planner";
+import type { plan } from "./types";
 
 export async function runPlanMode():Promise<void> {
     console.log(chalk.bold('\n ⏰ PLAN MODE: \n '));

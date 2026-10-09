@@ -11,7 +11,9 @@ import chalk from 'chalk';
 import { getAgentModel } from '../../ai';
 import { ToolExecutor } from '../agent/tool-executor';
 import { defaultAgentConfig } from '../agent/types';
-import type {plan , planstep} from './types.ts';
+import type { plan , planstep} from './types.ts';
+import { ActionTracker } from '../agent/action.tracker';
+import { title } from 'process';
 
 const planSchema = z.object({
     researchSummary:z.string().optional(),
@@ -92,5 +94,46 @@ const PLAN_INSTRUCTIONS = (codebase: string, hasWeb: boolean) =>
       ? 'Web tools are available (web_search/web_crawl/fetch_url). Use only when needed.'
       : 'Web tools are unavailable (no FIRECRAWL_API_KEY).',
     'Output must match the provided JSON schema.',
-    'Keep it short: 1-10 steps.',
+    'Keep it short: 1-15 steps.',
   ].join('\n');
+
+  export async function generatePlan(goal:string) {
+    const config = defaultAgentConfig();
+    const tracker = new ActionTracker();
+    const executor = new ToolExecutor(config, tracker, config.codebasePath);
+    
+    const hasWeb= false
+    const model = wrapLanguageModel({
+        model:getAgentModel(),
+        middleware:extractJsonMiddleware()
+    })
+
+    // tdod: add web serach tools
+    const tools = {...readOnlyTools(executor)}
+
+    console.log(chalk.cyan("\n 🔍 Reasoning & Researching..."));
+
+    const result = await generateText({
+        model,
+        tools,
+        system:PLAN_INSTRUCTIONS(config.codebasePath,hasWeb), // hasWeb false for now
+        prompt:`User goal:${goal}\n\n`,
+        output: Output.object({ schema: planSchema }),
+    })
+
+    const validate = planSchema.parse(result.output);
+
+    const steps: planstep[] = validate.steps.map((s, i) => ({
+      id: `step-${i + 1}`,
+      title: s.title,
+      description: s.description,
+      hints: s.hints,
+      complexity: s.complexity || "medium"
+    }));
+    
+    return {
+      goal,
+      researchSummary:validate.researchSummary,
+      steps
+    }
+  }
