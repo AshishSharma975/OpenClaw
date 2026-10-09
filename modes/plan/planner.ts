@@ -119,6 +119,17 @@ const PLAN_INSTRUCTIONS = (codebase: string, hasWeb: boolean) =>
         system:PLAN_INSTRUCTIONS(config.codebasePath,hasWeb), // hasWeb false for now
         prompt:`User goal:${goal}\n\n`,
         output: Output.object({ schema: planSchema }),
+        stopWhen: stepCountIs(15),
+        onStepFinish: ({ toolCalls }) => {
+            for (const tc of toolCalls) {
+                const preview = JSON.stringify(tc.input).slice(0, 160);
+                console.log(
+                    chalk.green(' ✔️'),
+                    chalk.bold(String(tc.toolName)),
+                    chalk.dim(preview + (preview.length >= 160 ? " ..." : ""))
+                );
+            }
+        }
     })
 
     const validate = planSchema.parse(result.output);

@@ -1,6 +1,7 @@
+import { multiselect, isCancel } from "@clack/prompts";
 import chalk from "chalk";
 import { renderTerminalMarkdown } from "../../tui/terminal-md";
-import type { plan as Plan } from "./types";
+import type { Plan, PlanStep } from "./types";
 
 const COMPLEXITY_COLOR: Record<'low' | 'medium' | 'high', string> = {
   low: chalk.green('low'),
@@ -19,4 +20,23 @@ export function printPlan(plan: Plan): void {
     console.log(`  ${chalk.cyan(`Step ${String(i + 1).padStart(2)}`)}. ${chalk.bold(s.title)}${tag}`);
   }
   console.log();
+}
+
+export async function selectSteps(plan: Plan): Promise<PlanStep[]> {
+  const options = plan.steps.map((s) => ({
+    value: s.id,
+    label: s.title,
+    hint: s.complexity ?? '',
+  }));
+
+  const picked = await multiselect<string>({
+    message: 'Select steps to execute (space toggles, enter confirms)',
+    options,
+    initialValues: plan.steps.map((s) => s.id),
+    required: false,
+  });
+
+  if (isCancel(picked)) return [];
+  const set = new Set<string>(picked as string[]);
+  return plan.steps.filter((s) => set.has(s.id));
 }
