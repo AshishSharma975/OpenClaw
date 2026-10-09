@@ -9,6 +9,7 @@ import { defaultAgentConfig } from "../agent/types";
 import { renderTerminalMarkeddown } from "../../tui/terminal-md";
 import { runApprovalFlow } from "../agent/approval";
 import { generatePlan } from "./planner";
+import { printPlan } from "./selection";
 import type { plan } from "./types";
 
 export async function runPlanMode():Promise<void> {
@@ -22,5 +23,7 @@ export async function runPlanMode():Promise<void> {
     if(isCancel(goal) || !goal.trim()) return;
 
     const plan = await generatePlan(goal);
+
+    printPlan(plan);
     
 }

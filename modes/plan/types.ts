@@ -13,4 +13,7 @@ export interface plan{
    steps:planstep[];
 }
 
+export type Plan = plan;
+export type PlanStep = planstep;
+
 
