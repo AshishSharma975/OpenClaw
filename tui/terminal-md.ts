@@ -17,6 +17,8 @@ export function renderTerminalMarkeddown(source: string): string {
   return marked.parse(source.trimEnd(), { async: false }) as string;
 }
 
+export const renderTerminalMarkdown = renderTerminalMarkeddown;
+
 
 
 
