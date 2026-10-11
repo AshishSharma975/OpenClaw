@@ -57,7 +57,7 @@ export async function runPlanMode():Promise<void> {
 
     //todo: add web tools
     const tools ={
-        ...createAgentTools(executor)
+        ...createAgentTools(executor),
         ...createWebTools(tracker)
     }
 

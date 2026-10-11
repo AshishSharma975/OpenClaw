@@ -123,6 +123,7 @@ const PLAN_INSTRUCTIONS = (codebase: string, hasWeb: boolean) =>
         stopWhen: stepCountIs(15),
         onStepFinish: ({ toolCalls }) => {
             for (const tc of toolCalls) {
+                if (!tc) continue;
                 const preview = JSON.stringify(tc.input).slice(0, 160);
                 console.log(
                     chalk.green(' ✔️'),
