@@ -10,11 +10,12 @@ import { renderTerminalMarkeddown } from "../../tui/terminal-md";
 import { runApprovalFlow } from "../agent/approval";
 import { generatePlan } from "./planner";
 import { printPlan, selectSteps } from "./selection";
-import type { plan, planstep } from "./types";
+import type { Plan, PlanStep } from "./types";
 import { createAgentTools } from "../agent/agent-tools";
+import { createWebTools } from "./web-tools";
 
 
-function stepPrompt (goal:string,step:planstep):string {
+function stepPrompt (goal:string,step:PlanStep):string {
   return `
   #Goal:${goal}
   #currentStep:${step.title}
@@ -57,6 +58,7 @@ export async function runPlanMode():Promise<void> {
     //todo: add web tools
     const tools ={
         ...createAgentTools(executor)
+        ...createWebTools(tracker)
     }
 
     for(const step of selected){

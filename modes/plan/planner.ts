@@ -14,6 +14,7 @@ import { defaultAgentConfig } from '../agent/types';
 import type { plan , planstep} from './types.ts';
 import { ActionTracker } from '../agent/action.tracker';
 import { title } from 'process';
+import { createWebTools } from './web-tools.ts';
 
 const planSchema = z.object({
     researchSummary:z.string().optional(),
@@ -102,14 +103,13 @@ const PLAN_INSTRUCTIONS = (codebase: string, hasWeb: boolean) =>
     const tracker = new ActionTracker();
     const executor = new ToolExecutor(config, tracker, config.codebasePath);
     
-    const hasWeb= false
+    const hasWeb= !!process.env.FIRECRAWL_API_KEY
     const model = wrapLanguageModel({
         model:getAgentModel(),
         middleware:extractJsonMiddleware()
     })
 
-    // tdod: add web serach tools
-    const tools = {...readOnlyTools(executor)}
+    const tools = {...readOnlyTools(executor),...(hasWeb ? createWebTools(tracker):{})}
 
     console.log(chalk.cyan("\n 🔍 Reasoning & Researching..."));
 
@@ -117,7 +117,8 @@ const PLAN_INSTRUCTIONS = (codebase: string, hasWeb: boolean) =>
         model,
         tools,
         system:PLAN_INSTRUCTIONS(config.codebasePath,hasWeb), // hasWeb false for now
-        prompt:`User goal:${goal}\n\n`,
+        prompt:`User goal:${goal}\n\n`+ (hasWeb ? "" :"web tools are unavailable") +`
+        Now generate the plan`,
         output: Output.object({ schema: planSchema }),
         stopWhen: stepCountIs(15),
         onStepFinish: ({ toolCalls }) => {
