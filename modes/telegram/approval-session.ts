@@ -29,10 +29,10 @@ function groupPending(pending: ActionLog[]) {
 export function approvalSummary(pending: ActionLog[]): string {
     const { files, shells } = groupPending(pending);
     const fileLines = [...files].map(([path, actions]) => {
-        const kinds = [...new Set(actions.map((a) => a.type))].join(', ');
-        return `• \`${path}\` (${kinds})`;
+        const kinds = [...new Set(actions.map((a) => a.type.replace(/_/g, ' ')))].join(', ');
+        return `📄 ${path} (${kinds})`;
     });
-    const shellLines = shells.map((s) => `• 🖥 Shell: \`${s.details?.command}\``);
+    const shellLines = shells.map((s) => `🖥 Shell: ${s.details?.command}`);
     return ['Staged changes — review before applying', '', ...fileLines, ...shellLines, '', `Total: ${pending.length} change(s)`].join('\n');
 }
 
@@ -44,7 +44,7 @@ export function approvalDiff(pending: ActionLog[]): string {
         const { before, after } = composeBeforeAfter(sorted);
         parts.push(clip(formatPatch(filePath, before, after), 1500));
     }
-    for (const s of shells) parts.push(`• 🖥 Shell: ${s.details?.command}`);
+    for (const s of shells) parts.push(`🖥 Shell: ${s.details?.command}`);
     return parts.join('\n\n').trim();
 }
 
@@ -55,12 +55,11 @@ async function promptApproval(
 ) {
     approvalSessions.set(chatId, session);
     await ctx.reply(approvalSummary(session.pending), {
-        parse_mode: 'Markdown',
         ...Markup.inlineKeyboard([
+            [Markup.button.callback('📋 Show Diff', 'approval_diff')],
             [
-                Markup.button.callback('Diff', 'approval_diff'),
-                Markup.button.callback('Accept', 'approval_accept'),
-                Markup.button.callback('Reject', 'approval_reject'),
+                Markup.button.callback('✅ Accept All', 'approval_accept'),
+                Markup.button.callback('❌ Reject All', 'approval_reject'),
             ],
         ]),
     });

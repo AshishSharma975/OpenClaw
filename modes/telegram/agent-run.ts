@@ -25,7 +25,10 @@ function agentOptions(config:AgentConfig, maxSteps:number){
     return {
         model:getAgentModel(),
         stopWhen: stepCountIs(maxSteps),
-        instructions: `Workspace root: ${config.codebasePath}`
+        instructions: [
+            `Workspace root: ${config.codebasePath}`,
+            'All mutations are staged until approval.'
+        ].join('\n')
     };
 }
 
