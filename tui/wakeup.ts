@@ -63,9 +63,8 @@ if(mode === "cli"){
     console.log(chalk.green("CLI Mode selected"));
     await runCliMode();
 } else if(mode === "telegram") {
-    await runTelegramMode();
     console.log(chalk.blue("Telegram Bot Mode selected"));
-    // await runTelegramMode();
+    await runTelegramMode();
 } else {
     console.log(chalk.red("Exiting..."));
     process.exit(0);
