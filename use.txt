@@ -33,8 +33,19 @@ for ex. -  openai/gpt-oss-20b - this is free and very good for the first attempt
 - make sure that in every step we store response in a variable and in last we show the response in terminal.
 
 
-            
+ for web search - "openrouter/firecrawl:free" -this is free and very good for the first attempt.
+ -add web tool in plan mode. but we have to add a check - if the user has firecrawl api key or not. if not then show a message - "web tools are unavailable".
+ - for now we dont have firecrawl api key so add it "" and check if (process.env.FIRECLAW_API_KEY) is present or not.
 
-            
+ - make a function which will check the env varable and if not present then show a message and exit.
+  - this function should be called in every mode where we use env varable.
 
 
+
+
+telegraf - it is a telegram bot framework.
+add telegraf in our project and create a telegram bot.
+
+we have 2 option for telegram bot:
+1. we can run the bot on our local machine.
+2. we can run the bot on a server.

@@ -3,6 +3,7 @@ import chalk from "chalk"; // for add coloring in terminal.
 import figlet from "figlet"; // for add big letters.
 
 import { runCliMode } from "../modes/cli";
+import { runTelegramMode } from "../modes/telegram";
 
 const BANNER_FONT='ANSI SHADOW';
 const SHADOW = chalk.hex('#5b4d9e');
@@ -62,6 +63,7 @@ if(mode === "cli"){
     console.log(chalk.green("CLI Mode selected"));
     await runCliMode();
 } else if(mode === "telegram") {
+    await runTelegramMode();
     console.log(chalk.blue("Telegram Bot Mode selected"));
     // await runTelegramMode();
 } else {
