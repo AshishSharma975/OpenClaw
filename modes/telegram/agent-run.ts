@@ -7,6 +7,8 @@ import { createAgentTools } from '../agent/agent-tools.ts';
 import { defaultAgentConfig, type AgentConfig } from '../agent/types.ts';
 import { createWebTools } from '../plan/web-tools.ts';
 import type { Plan, PlanStep } from '../plan/types.ts';
+import { replyMd } from './text.ts';
+import { finishOrApprove } from './approval-session.ts';
 
 
 
@@ -73,7 +75,7 @@ function extraWebTool(tracker:ActionTracker){
 
 }
 
-export async function runAsk( ctx:{reply:(t:string, o?:object)=> Promise<unknown>},) {
+export async function runAsk( ctx:{reply:(t:string, o?:object)=> Promise<unknown>}, q:string    ) {
     const config = readOnlyConfig();
     const tracker = new ActionTracker();
     const executor = new ToolExecutor(config, tracker, config.codebasePath);
@@ -83,4 +85,48 @@ export async function runAsk( ctx:{reply:(t:string, o?:object)=> Promise<unknown
         tools
     })
 
+    const {text} = await agents.generate({
+        prompt:q,
+    })
+    await replyMd(ctx , text || "no answer");
+
+}
+
+export async function runAgent(ctx: { reply: (t: string, o?: object) => Promise<unknown> }, chatId: number, goal: string) {
+    const config = defaultAgentConfig();
+    const tracker = new ActionTracker();
+    const executor = new ToolExecutor(config, tracker, config.codebasePath);
+    const tools = createAgentTools(executor);
+    const agent = new ToolLoopAgent({
+        ...agentOptions(config, 40),
+        tools,
+    });
+    const { text } = await agent.generate({ prompt: goal });
+    if (text?.trim()) await replyMd(ctx, text.trim());
+    await finishOrApprove(ctx, chatId, tracker, executor, '✅ Done. No file changes were needed.');
+}
+
+export async function runPlanSteps(
+    ctx: { reply: (t: string, o?: object) => Promise<unknown> },
+    chatId: number,
+    plan: Plan,
+    steps: PlanStep[],
+) {
+    const config = defaultAgentConfig();
+    const tracker = new ActionTracker();
+    const executor = new ToolExecutor(config, tracker, config.codebasePath);
+    const tools = { ...createAgentTools(executor), ...extraWebTool(tracker) };
+
+    for (const step of steps) {
+        await ctx.reply(`🔧 Executing: *${step.title}*`, { parse_mode: 'Markdown' });
+        const prompt = [`Goal: ${plan.goal}`, `Step: ${step.title}`, step.description].join('\n');
+        const agent = new ToolLoopAgent({
+            ...agentOptions(config, 30),
+            tools,
+        });
+        const { text } = await agent.generate({ prompt });
+        if (text?.trim()) await replyMd(ctx, text.trim());
+    }
+
+    await finishOrApprove(ctx, chatId, tracker, executor, '✅ All steps done. No file changes were needed.');
 }
