@@ -20,6 +20,10 @@ export async function runTelegramMode() {
     const bot = new Telegraf(token);
     registerHandler(bot);
 
+    bot.catch((err: any) => {
+        console.error("Telegram error caught safely:", err?.message || err);
+    });
+
     try {
         await bot.telegram.sendMessage(ownerId, WELCOME, { parse_mode: "Markdown" });
         console.log(chalk.green("sent welcome to telegram.\n"));

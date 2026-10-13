@@ -46,8 +46,18 @@ export async function refreshPlanUi(
     ctx:{editMessageText : (t: string, o:object)=> Promise<unknown>},
     s:PlanSession,
 ){
-    await ctx.editMessageText(planMessage(s),{
-        parse_mode: "Markdown",
-        reply_markup:planKeyboard(s).reply_markup,
-    })
+    try {
+        await ctx.editMessageText(planMessage(s),{
+            parse_mode: "Markdown",
+            reply_markup:planKeyboard(s).reply_markup,
+        });
+    } catch (err: any) {
+        if (
+            err?.description?.includes("message is not modified") ||
+            err?.message?.includes("message is not modified")
+        ) {
+            return;
+        }
+        throw err;
+    }
 }

@@ -45,7 +45,7 @@ export function approvalDiff(pending: ActionLog[]): string {
         parts.push(clip(formatPatch(filePath, before, after), 1500));
     }
     for (const s of shells) parts.push(`🖥 Shell: ${s.details?.command}`);
-    return parts.join('\n\n').trim();
+    return clip(parts.join('\n\n').trim(), 4000);
 }
 
 async function promptApproval(
