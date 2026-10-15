@@ -18,7 +18,7 @@ Unlike conventional coding bots that blindly modify files on disk, **OpenClaw im
 - 🛡️ **In-Memory Staging & Diff Approval**: Zero unreviewed mutations. See before/after diffs and selectively accept or reject every single file change.
 - 💬 **Dual Interface**:
   - **Terminal TUI**: Beautiful ASCII shadow banner, interactive menus, spinners, and Markdown rendering via `@clack/prompts` and `marked-terminal`.
-  - **Telegram Bot**: Full remote control over your workspace with inline keyboard buttons, live diffs, and owner authorization.
+  - **Telegram Bot**: Full remote control over your workspace with inline keyboard buttons, live diffs, and owner authorization...
 - 🧠 **Multi-Model Intelligence**: Powered by `@openrouter/ai-sdk-provider` and Vercel AI SDK (`ai`), allowing instant switching between free models (`openrouter/free`, `openai/gpt-oss-20b`) and top-tier frontier models.
 - 🌐 **Live Web Intelligence**: Firecrawl integration (`@mendable/firecrawl-js`) for real-time web search and markdown scraping (auto-falls back if no key provided).
 - 🧩 **Extensible Skills Architecture**: Dynamic support for custom workspace skills defined in `skills/` or `.agents/skills/` using `SKILL.md`.
